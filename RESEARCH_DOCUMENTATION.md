@@ -1,6 +1,4 @@
-# Habitat-Sim Extensions Documentation
-
-This README documents custom extensions built on top of the `habitat-sim` framework.
+# Habitat-Sim Extensions Documentation for Research
 
 ## Table of Contents
 - [ProgrammaticController](#programmaticcontroller)
