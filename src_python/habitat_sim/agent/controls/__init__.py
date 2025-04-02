@@ -9,9 +9,15 @@ from habitat_sim.agent.controls.default_controls import *  # noqa: F401, F403
 from habitat_sim.agent.controls.object_controls import ObjectControls
 from habitat_sim.agent.controls.pyrobot_noisy_controls import PyRobotNoisyActuationSpec
 
+# Add the programatic controller
+from habitat_sim.agent.controls.programatic_controller import ProgrammaticController
+
+
+
 __all__ = [
     "ActuationSpec",
     "ObjectControls",
     "SceneNodeControl",
     "PyRobotNoisyActuationSpec",
+    "ProgrammaticController",
 ]

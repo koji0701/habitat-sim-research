@@ -4,92 +4,198 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import os
 import numpy as np
 import habitat_sim
-from habitat_sim.agent.controls.programmatic_controller import ProgrammaticController
+from habitat_sim.agent.controls.controls import ActuationSpec
+from habitat_sim.agent.agent import Agent
 
-def main():
-    # Set up a basic simulator configuration
-    sim_settings = {
-        "scene": "data/scene_datasets/habitat-test-scenes/skokloster-castle.glb",
-        "default_agent": 0,
-        "sensor_height": 1.5,
-        "width": 512,
-        "height": 512,
-        "sensor_pitch": 0,
-    }
+class ProgrammaticController:
+    """Controller that provides programmatic movement for an agent.
+    Allows execution of action sequences, movement by specific amounts,
+    and navigation to target positions.
+    """
     
-    # Create a simulator configuration
-    cfg = make_simple_cfg(sim_settings)
+    def __init__(self, agent: Agent):
+        """Initialize the controller with an agent.
+        
+        Args:
+            agent: The agent to control
+        """
+        self.agent = agent
+        self.collision_occurred = False
+        self.last_collision_action = None
+        
+    def move(self, action_name: str) -> bool:
+        """Execute a single action by name.
+        
+        Args:
+            action_name: Name of the action to execute
+            
+        Returns:
+            Whether a collision occurred during the action
+        """
+        did_collide = self.agent.act(action_name)
+        if did_collide:
+            self.collision_occurred = True
+            self.last_collision_action = action_name
+        return did_collide
+        
+    def execute_sequence(self, action_sequence: list) -> bool:
+        """Execute a sequence of actions.
+        
+        Args:
+            action_sequence: List of action names to execute in order
+            
+        Returns:
+            Whether any collision occurred during the sequence
+        """
+        any_collision = False
+        for action in action_sequence:
+            did_collide = self.move(action)
+            any_collision = any_collision or did_collide
+        return any_collision
     
-    # Initialize the simulator
-    sim = habitat_sim.Simulator(cfg)
+    def move_forward_by(self, distance: float) -> bool:
+        """Move forward by a specific distance in meters.
+        
+        Args:
+            distance: Distance to move in meters
+            
+        Returns:
+            Whether any collision occurred
+        """
+        # Get the move_forward action spec
+        action_spec = self.agent.agent_config.action_space["move_forward"].actuation
+        
+        # Calculate how many times to execute the action
+        num_actions = int(distance / action_spec.amount)
+        remainder = distance % action_spec.amount
+        
+        # Execute the action multiple times
+        collision = False
+        for _ in range(num_actions):
+            did_collide = self.move("move_forward")
+            collision = collision or did_collide
+            
+        # Handle remainder
+        if remainder > 0:
+            # Store original amount
+            original_amount = action_spec.amount
+            # Modify action specification temporarily
+            action_spec.amount = remainder
+            did_collide = self.move("move_forward")
+            collision = collision or did_collide
+            # Restore original amount
+            action_spec.amount = original_amount
+            
+        return collision
     
-    # Get the default agent
-    agent = sim.agents[0]
+    def rotate_by(self, angle: float) -> bool:
+        """Rotate by a specific angle in degrees.
+        
+        Args:
+            angle: Angle to rotate in degrees, positive is left, negative is right
+            
+        Returns:
+            Whether any collision occurred
+        """
+        collision = False
+        
+        if angle > 0:
+            # Turn left
+            action_spec = self.agent.agent_config.action_space["turn_left"].actuation
+            num_actions = int(angle / action_spec.amount)
+            remainder = angle % action_spec.amount
+            
+            for _ in range(num_actions):
+                did_collide = self.move("turn_left")
+                collision = collision or did_collide
+                
+            if remainder > 0:
+                original_amount = action_spec.amount
+                action_spec.amount = remainder
+                did_collide = self.move("turn_left")
+                collision = collision or did_collide
+                action_spec.amount = original_amount
+                
+        elif angle < 0:
+            # Turn right
+            action_spec = self.agent.agent_config.action_space["turn_right"].actuation
+            num_actions = int(abs(angle) / action_spec.amount)
+            remainder = abs(angle) % action_spec.amount
+            
+            for _ in range(num_actions):
+                did_collide = self.move("turn_right")
+                collision = collision or did_collide
+                
+            if remainder > 0:
+                original_amount = action_spec.amount
+                action_spec.amount = remainder
+                did_collide = self.move("turn_right")
+                collision = collision or did_collide
+                action_spec.amount = original_amount
+                
+        return collision
     
-    # Create our programmatic controller for the agent
-    controller = ProgrammaticController(agent)
-    
-    # Execute a predefined sequence of actions
-    print("Executing a simple action sequence")
-    sequence = ["move_forward", "turn_left", "move_forward", "turn_right", "move_forward"]
-    controller.execute_sequence(sequence)
-    
-    # Move forward by a specific amount
-    print("Moving forward by 2 meters")
-    controller.move_forward_by(2.0)
-    
-    # Rotate by a specific angle
-    print("Rotating 90 degrees left")
-    controller.rotate_by(90)
-    
-    # Navigate to a target position
-    print("Navigating to target position")
-    current_position = agent.get_state().position
-    target_position = current_position + np.array([3.0, 0.0, 0.0])
-    controller.navigate_to(target_position)
-    
-    # Check if collision occurred during the sequence
-    if controller.collision_occurred:
-        print(f"A collision occurred during the navigation when executing: {controller.last_collision_action}")
-    
-    # Close the simulator
-    sim.close()
-    
-    print("Programmatic control example completed successfully!")
-
-def make_simple_cfg(settings):
-    """Create a simple simulator configuration based on settings."""
-    sim_cfg = habitat_sim.SimulatorConfiguration()
-    sim_cfg.scene_id = settings["scene"]
-    
-    # Set up the agent configuration
-    agent_cfg = habitat_sim.agent.AgentConfiguration()
-    
-    # Create a RGB sensor
-    sensors = {
-        "rgb": {
-            "sensor_type": habitat_sim.SensorType.COLOR,
-            "resolution": [settings["height"], settings["width"]],
-            "position": [0.0, settings["sensor_height"], 0.0],
-        }
-    }
-    
-    # Create sensor specifications
-    sensor_specs = []
-    for sensor_uuid, sensor_params in sensors.items():
-        sensor_spec = habitat_sim.SensorSpec()
-        sensor_spec.uuid = sensor_uuid
-        sensor_spec.sensor_type = sensor_params["sensor_type"]
-        sensor_spec.resolution = sensor_params["resolution"]
-        sensor_spec.position = sensor_params["position"]
-        sensor_spec.sensor_subtype = habitat_sim.SensorSubType.PINHOLE
-        sensor_specs.append(sensor_spec)
-    
-    agent_cfg.sensor_specifications = sensor_specs
-    return habitat_sim.Configuration(sim_cfg, [agent_cfg])
-
-if __name__ == "__main__":
-    main()
+    def navigate_to(self, target_position: np.ndarray, 
+                   position_threshold: float = 0.2, 
+                   max_iterations: int = 100) -> bool:
+        """Navigate to a target position using a simple approach.
+        
+        Args:
+            target_position: Target position as numpy array [x, y, z]
+            position_threshold: How close agent needs to be to target
+            max_iterations: Maximum number of steps to try
+            
+        Returns:
+            Whether any collision occurred during navigation
+        """
+        collision = False
+        iterations = 0
+        
+        while iterations < max_iterations:
+            # Get current state
+            current_state = self.agent.get_state()
+            current_position = current_state.position
+            
+            # Check if we're close enough to target
+            distance = np.linalg.norm(current_position - target_position)
+            if distance <= position_threshold:
+                break
+                
+            # Calculate direction to target
+            direction = target_position - current_position
+            direction[1] = 0  # Ignore vertical component
+            direction = direction / np.linalg.norm(direction)
+            
+            # Get agent's forward direction
+            forward = np.array([0, 0, -1])  # Negative Z is forward
+            forward = habitat_sim.utils.quat_rotate_vector(
+                current_state.rotation, forward
+            )
+            forward[1] = 0  # Ignore vertical component
+            if np.linalg.norm(forward) > 0:
+                forward = forward / np.linalg.norm(forward)
+            
+            # Calculate angle between forward and target direction
+            dot_product = np.dot(forward, direction)
+            dot_product = np.clip(dot_product, -1.0, 1.0)
+            angle = np.arccos(dot_product) * 180 / np.pi
+            
+            # Determine turn direction
+            cross_product = np.cross(forward, direction)
+            if cross_product[1] < 0:
+                angle = -angle
+                
+            # Turn towards target
+            if abs(angle) > 5:
+                did_collide = self.rotate_by(angle)
+                collision = collision or did_collide
+            else:
+                # Move forward
+                did_collide = self.move("move_forward")
+                collision = collision or did_collide
+                
+            iterations += 1
+            
+        return collision
