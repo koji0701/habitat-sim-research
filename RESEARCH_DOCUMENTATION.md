@@ -1,10 +1,7 @@
-Here is the documentation for everything created on top of the habitat-sim: 
+ProgrammaticController
+Location: habitat-sim/src_python/habitat_sim/agent/controls/programatic_controller.py
+This module introduces the ProgrammaticController class which provides automated agent movement capabilities. The controller can be reused in any project requiring automated navigation within Habitat environments.
 
-**habitat-sim/src_python/habitat_sim/agent/controls/programatic_controller.py**
-- this creates the '''ProgrammaticController''' class which can be reused anywhere for automatic agent movement
-
-**/habitat-sim/src_python/habitat_sim/agent/controls/programatic_movement_demo.py**
-- this is a quick demo of the '''ProgramaticController''' class, with a hard coded path (movement + rotations)
-- to run, cd into the controls directory, and run '''python programatic_movement_demo.py'''
-
-  
+Programmatic Movement Demo
+Location: habitat-sim/src_python/habitat_sim/agent/controls/programatic_movement_demo.py
+A demonstration script showcasing the ProgrammaticController class functionality with a pre-defined path (including both movements and rotations).
