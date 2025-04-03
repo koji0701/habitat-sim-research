@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import habitat_sim
 from programatic_controller import ProgrammaticController
+import time
 
 def main():
     # Set the path to your data directory (adjust as needed)
@@ -65,24 +66,28 @@ def main():
     # IMPORTANT: THIS CAN BE CHANGED TO FIT A PATH OF MOVEMENT
     sequence = [
         "move_forward", "move_forward", "turn_left", 
-        "move_forward", "turn_right", "move_forward",
+        "move_forward", "turn_left", "move_forward",
         "move_forward", "move_forward", "turn_left", 
-        "move_forward", "turn_right", "move_forward",
+        "move_forward", "turn_left", "move_forward",
         "move_forward", "move_forward", "turn_left", 
-        "move_forward", "turn_right", "move_forward",
+        "move_forward", "turn_left", "move_forward",
         "move_forward", "move_forward", "turn_left", 
-        "move_forward", "turn_right", "move_forward",
-        "move_forward", "move_forward", "turn_left", 
-        "move_forward", "turn_right", "move_forward",
+        "move_forward", "turn_left", "move_forward",
     ]
     
     print("\nExecuting a sequence of actions...")
-    for action in sequence:
-        print(f"Executing: {action}")
-        controller.move(action)
-        observations = simulator.get_sensor_observations()
-        cv2.imshow("RGB Observation", observations["rgb"])
-        cv2.waitKey(1000)  # Wait 1 second between actions
+    TOTAL_DEMO_MOVEMENT_TIME = 30
+    startTime = time.time()
+
+    while time.time() - startTime < TOTAL_DEMO_MOVEMENT_TIME:
+        for action in sequence:
+            print(f"Executing: {action}")
+            controller.move(action)
+            observations = simulator.get_sensor_observations()
+            cv2.imshow("RGB Observation", observations["rgb"])
+            cv2.waitKey(50)  # Wait 0.05 second between actions
+    
+
     
     print("\nMoving forward by 2 meters...")
     controller.move_forward_by(2.0)
