@@ -79,14 +79,20 @@ def main():
     TOTAL_DEMO_MOVEMENT_TIME = 30
     startTime = time.time()
 
+    lastCollisionCount = controller.collision_count
+
     while time.time() - startTime < TOTAL_DEMO_MOVEMENT_TIME:
         for action in sequence:
-            print(f"Executing: {action}")
+            #print(f"Executing: {action}")
             controller.move(action)
             observations = simulator.get_sensor_observations()
             cv2.imshow("RGB Observation", observations["rgb"])
             cv2.waitKey(50)  # Wait 0.05 second between actions
-    
+
+            if controller.collision_count > lastCollisionCount:
+                
+                print("Collision Occured! Collision count: ", controller.collision_count)
+                lastCollisionCount = controller.collision_count    
 
     
     print("\nMoving forward by 2 meters...")

@@ -9,6 +9,7 @@ import habitat_sim
 from habitat_sim.agent.controls.controls import ActuationSpec
 from habitat_sim.agent.agent import Agent
 
+
 class ProgrammaticController:
     """Controller that provides programmatic movement for an agent.
     Allows execution of action sequences, movement by specific amounts,
@@ -24,6 +25,7 @@ class ProgrammaticController:
         self.agent = agent
         self.collision_occurred = False
         self.last_collision_action = None
+        self.collision_count = 0  # Track total number of collisions
         
     def move(self, action_name: str) -> bool:
         """Execute a single action by name.
@@ -38,6 +40,7 @@ class ProgrammaticController:
         if did_collide:
             self.collision_occurred = True
             self.last_collision_action = action_name
+            self.collision_count += 1  # Increment collision counter
         return did_collide
         
     def execute_sequence(self, action_sequence: list) -> bool:
@@ -54,6 +57,12 @@ class ProgrammaticController:
             did_collide = self.move(action)
             any_collision = any_collision or did_collide
         return any_collision
+    
+    def reset_collision_tracking(self):
+        """Reset collision tracking data."""
+        self.collision_occurred = False
+        self.last_collision_action = None
+        self.collision_count = 0
     
     def move_forward_by(self, distance: float) -> bool:
         """Move forward by a specific distance in meters.
