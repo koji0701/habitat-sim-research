@@ -21,6 +21,19 @@ from habitat_sim.nav import ShortestPath
 from habitat_sim.physics import MotionType
 from habitat_sim.utils.common import d3_40_colors_rgb, quat_from_angle_axis
 
+
+import math
+import multiprocessing
+import os
+import random
+import time
+import datetime
+from enum import Enum
+
+import numpy as np
+from PIL import Image
+from settings import default_sim_settings, make_cfg
+
 _barrier = None
 
 
@@ -40,6 +53,24 @@ class DemoRunner:
         if simulator_demo_type == DemoRunnerType.EXAMPLE:
             self.set_sim_settings(sim_settings)
         self._demo_type = simulator_demo_type
+        
+        # Create output directory if we're saving PNGs
+        if sim_settings.get("save_png", False):
+            self._output_dir = self.create_output_directory()
+            if isinstance(sim_settings, dict):
+                sim_settings["output_dir"] = self._output_dir
+        else:
+            self._output_dir = ""
+
+    def create_output_directory(self):
+        """Create a timestamped output directory for saving results."""
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        output_dir = f"habitat_output_{timestamp}"
+        
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        
+        return output_dir
 
     def set_sim_settings(self, sim_settings):
         self._sim_settings = sim_settings.copy()
@@ -49,11 +80,12 @@ class DemoRunner:
         color_img = Image.fromarray(color_obs, mode="RGBA")
         if self._demo_type == DemoRunnerType.AB_TEST:
             if self._group_id == ABTestGroup.CONTROL:
-                color_img.save("test.rgba.control.%05d.png" % total_frames)
+                filepath = os.path.join(self._output_dir, f"test.rgba.control.{total_frames:05d}.png")
             else:
-                color_img.save("test.rgba.test.%05d.png" % total_frames)
+                filepath = os.path.join(self._output_dir, f"test.rgba.test.{total_frames:05d}.png")
         else:
-            color_img.save("test.rgba.%05d.png" % total_frames)
+            filepath = os.path.join(self._output_dir, f"test.rgba.{total_frames:05d}.png")
+        color_img.save(filepath)
 
     def save_semantic_observation(self, obs, total_frames):
         semantic_obs = obs["semantic_sensor"]
@@ -62,22 +94,23 @@ class DemoRunner:
         semantic_img.putdata((semantic_obs.flatten() % 40).astype(np.uint8))
         if self._demo_type == DemoRunnerType.AB_TEST:
             if self._group_id == ABTestGroup.CONTROL:
-                semantic_img.save("test.sem.control.%05d.png" % total_frames)
+                filepath = os.path.join(self._output_dir, f"test.sem.control.{total_frames:05d}.png")
             else:
-                semantic_img.save("test.sem.test.%05d.png" % total_frames)
+                filepath = os.path.join(self._output_dir, f"test.sem.test.{total_frames:05d}.png")
         else:
-            semantic_img.save("test.sem.%05d.png" % total_frames)
-
+            filepath = os.path.join(self._output_dir, f"test.sem.{total_frames:05d}.png")
+        semantic_img.save(filepath)
     def save_depth_observation(self, obs, total_frames):
         depth_obs = obs["depth_sensor"]
         depth_img = Image.fromarray((depth_obs / 10 * 255).astype(np.uint8), mode="L")
         if self._demo_type == DemoRunnerType.AB_TEST:
             if self._group_id == ABTestGroup.CONTROL:
-                depth_img.save("test.depth.control.%05d.png" % total_frames)
+                filepath = os.path.join(self._output_dir, f"test.depth.control.{total_frames:05d}.png")
             else:
-                depth_img.save("test.depth.test.%05d.png" % total_frames)
+                filepath = os.path.join(self._output_dir, f"test.depth.test.{total_frames:05d}.png")
         else:
-            depth_img.save("test.depth.%05d.png" % total_frames)
+            filepath = os.path.join(self._output_dir, f"test.depth.{total_frames:05d}.png")
+        depth_img.save(filepath)
 
     def output_semantic_mask_stats(self, obs, total_frames):
         semantic_obs = obs["semantic_sensor"]
@@ -228,6 +261,9 @@ class DemoRunner:
             print("active object names: " + str(rigid_obj_mgr.get_object_handles()))
 
         time_per_step = []
+        
+        # Track detailed frame information for CSV
+        frame_data = []
 
         while total_frames < self._sim_settings["max_frames"]:
             if total_frames == 1:
@@ -253,23 +289,56 @@ class DemoRunner:
             total_sim_step_time += time.time() - start_step_time
 
             observations = self._sim.step(action)
-            time_per_step.append(time.time() - start_step_time)
+            step_time = time.time() - start_step_time
+            time_per_step.append(step_time)
 
             # get simulation step time without sensor observations
             total_sim_step_time += self._sim._previous_step_time
 
+            # Generate filenames even if not saving to track what would be saved
+            rgba_filename = f"test.rgba.{total_frames:05d}.png"
+            depth_filename = f"test.depth.{total_frames:05d}.png"
+            semantic_filename = f"test.sem.{total_frames:05d}.png"
+            
+            if self._demo_type == DemoRunnerType.AB_TEST:
+                if self._group_id == ABTestGroup.CONTROL:
+                    rgba_filename = f"test.rgba.control.{total_frames:05d}.png"
+                    depth_filename = f"test.depth.control.{total_frames:05d}.png"
+                    semantic_filename = f"test.sem.control.{total_frames:05d}.png"
+                else:
+                    rgba_filename = f"test.rgba.test.{total_frames:05d}.png"
+                    depth_filename = f"test.depth.test.{total_frames:05d}.png"
+                    semantic_filename = f"test.sem.test.{total_frames:05d}.png"
+                    
+            # Track which files were actually saved
+            saved_files = []
+            
             if self._sim_settings["save_png"]:
                 if self._sim_settings["color_sensor"]:
                     self.save_color_observation(observations, total_frames)
+                    saved_files.append(os.path.join(self._output_dir, rgba_filename))
                 if self._sim_settings["depth_sensor"]:
                     self.save_depth_observation(observations, total_frames)
+                    saved_files.append(os.path.join(self._output_dir, depth_filename))
                 if self._sim_settings["semantic_sensor"]:
                     self.save_semantic_observation(observations, total_frames)
+                    saved_files.append(os.path.join(self._output_dir, semantic_filename))
 
             state = self._sim.last_state()
 
             if not self._sim_settings["silent"]:
                 print("position\t", state.position, "\t", "rotation\t", state.rotation)
+
+            # Store frame data
+            frame_info = {
+                "frame": total_frames,
+                "action": action,
+                "position": state.position.tolist(),
+                "rotation": str(state.rotation),
+                "step_time": step_time,
+                "saved_files": saved_files
+            }
+            frame_data.append(frame_info)
 
             if self._sim_settings["compute_shortest_path"]:
                 self.compute_shortest_path(
@@ -296,6 +365,7 @@ class DemoRunner:
         perf["fps"] = 1.0 / perf["frame_time"]
         perf["time_per_step"] = time_per_step
         perf["avg_sim_step_time"] = total_sim_step_time / total_frames
+        perf["frame_data"] = frame_data  # Add the detailed frame data
 
         return perf
 
