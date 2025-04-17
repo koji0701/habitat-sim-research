@@ -288,7 +288,15 @@ class DemoRunner:
             # get "interaction" time
             total_sim_step_time += time.time() - start_step_time
 
-            observations = self._sim.step(action)
+            # Get the agent to access collision information
+            agent = self._sim.get_agent(self._sim_settings["default_agent"])
+            
+            # Use the agent's act method to get collision information
+            did_collide = agent.act(action)
+            
+            # We already performed the action with agent.act(), so we get observations without stepping again
+            observations = self._sim.get_sensor_observations()
+            
             step_time = time.time() - start_step_time
             time_per_step.append(step_time)
 
@@ -329,14 +337,15 @@ class DemoRunner:
             if not self._sim_settings["silent"]:
                 print("position\t", state.position, "\t", "rotation\t", state.rotation)
 
-            # Store frame data
+            # Store frame data with collision information
             frame_info = {
                 "frame": total_frames,
                 "action": action,
                 "position": state.position.tolist(),
                 "rotation": str(state.rotation),
                 "step_time": step_time,
-                "saved_files": saved_files
+                "saved_files": saved_files,
+                "collision": did_collide  # Add collision information
             }
             frame_data.append(frame_info)
 
@@ -368,7 +377,6 @@ class DemoRunner:
         perf["frame_data"] = frame_data  # Add the detailed frame data
 
         return perf
-
     def print_semantic_scene(self):
         if self._sim_settings["print_semantic_scene"]:
             scene = self._sim.semantic_scene

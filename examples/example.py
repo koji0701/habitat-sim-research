@@ -125,9 +125,9 @@ def save_performance_data(output_dir, perfs, settings):
         
         writer.writerow([])  # Empty row
         
-        # Write detailed frame data with position, rotation and action information
+        # Write detailed frame data with position, rotation, action and collision information
         writer.writerow(["Frame Details"])
-        writer.writerow(["Run", "Frame", "Action", "Position", "Rotation", "Step Time (ms)", "Saved Files"])
+        writer.writerow(["Run", "Frame", "Action", "Position", "Rotation", "Step Time (ms)", "Collision", "Saved Files"])
         
         for i, perf in enumerate(perfs):
             if "frame_data" in perf:
@@ -140,6 +140,7 @@ def save_performance_data(output_dir, perfs, settings):
                         str(frame_info["position"]),
                         frame_info["rotation"],
                         f"{frame_info['step_time'] * 1000.0:.3f}",
+                        "Yes" if frame_info["collision"] else "No",  # Add collision information
                         saved_files_str
                     ])
         
@@ -149,7 +150,7 @@ def save_performance_data(output_dir, perfs, settings):
     frame_csv_path = os.path.join(output_dir, "frame_data.csv")
     with open(frame_csv_path, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(["Run", "Frame", "Action", "Position X", "Position Y", "Position Z", "Rotation", "Step Time (ms)", "Saved Files"])
+        writer.writerow(["Run", "Frame", "Action", "Position X", "Position Y", "Position Z", "Rotation", "Step Time (ms)", "Collision", "Saved Files"])
         
         for i, perf in enumerate(perfs):
             if "frame_data" in perf:
@@ -165,11 +166,11 @@ def save_performance_data(output_dir, perfs, settings):
                         position[2],
                         frame_info["rotation"],
                         f"{frame_info['step_time'] * 1000.0:.3f}",
+                        "Yes" if frame_info["collision"] else "No",  # Add collision information
                         saved_files_str
                     ])
     
     return csv_path
-
 
 settings = make_settings()
 
